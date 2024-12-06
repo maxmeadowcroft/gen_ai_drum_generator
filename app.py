@@ -7,7 +7,7 @@ import mido
 import tensorflow as tf
 from tensorflow import keras
 from pydub import AudioSegment
-
+from pathlib import Path
 
 # -------------------------------------------
 # Functions for model loading and generation
@@ -133,6 +133,11 @@ def generate(model_choice, bpm, threshold, noise_level, temperature,
 
 st.title("Gen AI Drum Pattern Generator")
 
+# Default sound paths
+default_kick_path = Path("./kick.wav")
+default_snare_path = Path("./snare.wav")
+default_hh_path = Path("./hh.wav")
+
 model_choices = ["lstm", "transformer"]
 output_choices = ["WAV", "MIDI"]
 
@@ -151,22 +156,20 @@ uploaded_hh = st.file_uploader("Upload Hi-Hat Sample (WAV)", type="wav")
 
 if st.button("Generate"):
     try:
-        if not uploaded_kick or not uploaded_snare or not uploaded_hh:
-            st.error("Please upload all three drum samples to proceed.")
-        else:
-            kick_sound = AudioSegment.from_file(uploaded_kick)
-            snare_sound = AudioSegment.from_file(uploaded_snare)
-            hh_sound = AudioSegment.from_file(uploaded_hh)
+        # Use uploaded files or defaults
+        kick_sound = AudioSegment.from_file(uploaded_kick) if uploaded_kick else AudioSegment.from_file(default_kick_path)
+        snare_sound = AudioSegment.from_file(uploaded_snare) if uploaded_snare else AudioSegment.from_file(default_snare_path)
+        hh_sound = AudioSegment.from_file(uploaded_hh) if uploaded_hh else AudioSegment.from_file(default_hh_path)
 
-            label, wav_buffer, midi_buffer = generate(
-                model_choice, bpm, threshold, noise_level, temperature,
-                kick_sound, snare_sound, hh_sound, output_format
-            )
-            st.success(label)
-            if wav_buffer:
-                st.audio(wav_buffer, format="audio/wav")
-                st.download_button("Download WAV", data=wav_buffer, file_name="generated_sample.wav", mime="audio/wav")
-            if midi_buffer:
-                st.download_button("Download MIDI", data=midi_buffer, file_name="generated_sample.mid", mime="audio/midi")
+        label, wav_buffer, midi_buffer = generate(
+            model_choice, bpm, threshold, noise_level, temperature,
+            kick_sound, snare_sound, hh_sound, output_format
+        )
+        st.success(label)
+        if wav_buffer:
+            st.audio(wav_buffer, format="audio/wav")
+            st.download_button("Download WAV", data=wav_buffer, file_name="generated_sample.wav", mime="audio/wav")
+        if midi_buffer:
+            st.download_button("Download MIDI", data=midi_buffer, file_name="generated_sample.mid", mime="audio/midi")
     except Exception as e:
         st.error(f"An error occurred: {e}")
