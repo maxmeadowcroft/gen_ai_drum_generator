@@ -4,7 +4,6 @@ import numpy as np
 import streamlit as st
 from io import BytesIO
 import mido
-import tensorflow as tf
 from tensorflow import keras
 from pydub import AudioSegment
 from pathlib import Path
@@ -52,81 +51,52 @@ def generate_pattern(model, X, bpm, threshold, noise_level, temperature):
     return gen_combined, gen_kick, gen_hh
 
 
-def pattern_to_audio_full(gen_kick, gen_combined, gen_hh, bpm, kick_sound, snare_sound, hh_sound):
-    ms_per_beat = 60000.0 / bpm
-    total_duration_ms = TOTAL_BEATS * ms_per_beat
-    step_duration_ms = total_duration_ms / STEPS
-
-    output = AudioSegment.silent(duration=int(total_duration_ms))
-
-    for i in range(STEPS):
-        start_time_ms = int(i * step_duration_ms)
-        if gen_kick[i] == 1:
-            output = output.overlay(kick_sound, position=start_time_ms)
-        if gen_combined[i] == 1:
-            output = output.overlay(snare_sound, position=start_time_ms)
-        if gen_hh[i] == 1:
-            output = output.overlay(hh_sound, position=start_time_ms)
-
-    buffer = BytesIO()
-    output.export(buffer, format="wav")
-    buffer.seek(0)
-    return buffer
-
-
-def pattern_to_midi(gen_combined, gen_kick, gen_hh, bpm):
-    SNARE_NOTE = 38
+def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm):
+    # Define MIDI note constants
     KICK_NOTE = 36
+    SNARE_NOTE = 38
     HH_NOTE = 42
 
-    mid = mido.MidiFile()
-
-    kick_track = mido.MidiTrack()
-    snare_track = mido.MidiTrack()
-    hh_track = mido.MidiTrack()
-
-    mid.tracks.append(kick_track)
-    mid.tracks.append(snare_track)
-    mid.tracks.append(hh_track)
-
-    microseconds_per_beat = int((60_000_000 / bpm))
-    mid.ticks_per_beat = 480
-    kick_track.append(mido.MetaMessage('set_tempo', tempo=microseconds_per_beat))
-    snare_track.append(mido.MetaMessage('set_tempo', tempo=microseconds_per_beat))
-    hh_track.append(mido.MetaMessage('set_tempo', tempo=microseconds_per_beat))
-
+    # MIDI settings
+    microseconds_per_beat = int(60_000_000 / bpm)
     step_ticks = 120
 
-    for i in range(STEPS):
-        if gen_kick[i] == 1:
-            kick_track.append(mido.Message('note_on', note=KICK_NOTE, velocity=64, time=0))
-            kick_track.append(mido.Message('note_off', note=KICK_NOTE, velocity=64, time=step_ticks))
-        if gen_combined[i] == 1:
-            snare_track.append(mido.Message('note_on', note=SNARE_NOTE, velocity=64, time=0))
-            snare_track.append(mido.Message('note_off', note=SNARE_NOTE, velocity=64, time=step_ticks))
-        if gen_hh[i] == 1:
-            hh_track.append(mido.Message('note_on', note=HH_NOTE, velocity=64, time=0))
-            hh_track.append(mido.Message('note_off', note=HH_NOTE, velocity=64, time=step_ticks))
+    # Function to create a single MIDI track
+    def create_midi_track(pattern, note):
+        mid = mido.MidiFile()
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage('set_tempo', tempo=microseconds_per_beat))
+        abs_time = 0
+        for step in pattern:
+            if step == 1:
+                track.append(mido.Message('note_on', note=note, velocity=64, time=abs_time))
+                track.append(mido.Message('note_off', note=note, velocity=64, time=step_ticks))
+                abs_time = 0
+            else:
+                abs_time += step_ticks
+        return mid
 
-    # Save MIDI to a BytesIO object
-    buffer = BytesIO()
-    mid.save(file=buffer)
-    buffer.seek(0)  # Reset the buffer position for reading
-    return buffer
+    # Generate individual MIDI files
+    kick_midi = create_midi_track(kick_pattern, KICK_NOTE)
+    snare_midi = create_midi_track(snare_pattern, SNARE_NOTE)
+    hh_midi = create_midi_track(hh_pattern, HH_NOTE)
 
+    # Save to buffers
+    kick_buffer = BytesIO()
+    snare_buffer = BytesIO()
+    hh_buffer = BytesIO()
 
+    kick_midi.save(kick_buffer)
+    snare_midi.save(snare_buffer)
+    hh_midi.save(hh_buffer)
 
-def generate(model_choice, bpm, threshold, noise_level, temperature,
-             kick_sound, snare_sound, hh_sound, output_format):
-    model, X = load_model_and_data(model_choice)
-    gen_combined, gen_kick, gen_hh = generate_pattern(model, X, bpm, threshold, noise_level, temperature)
+    # Reset buffer positions
+    kick_buffer.seek(0)
+    snare_buffer.seek(0)
+    hh_buffer.seek(0)
 
-    if output_format == "WAV":
-        audio_buffer = pattern_to_audio_full(gen_kick, gen_combined, gen_hh, bpm, kick_sound, snare_sound, hh_sound)
-        return ("Here is your WAV file!", audio_buffer, None)
-    else:
-        midi_buffer = pattern_to_midi(gen_combined, gen_kick, gen_hh, bpm)
-        return ("Here is your MIDI file!", None, midi_buffer)
+    return kick_buffer, snare_buffer, hh_buffer
 
 
 # -------------------------------------------
@@ -163,15 +133,23 @@ if st.button("Generate"):
         snare_sound = AudioSegment.from_file(uploaded_snare) if uploaded_snare else AudioSegment.from_file(default_snare_path)
         hh_sound = AudioSegment.from_file(uploaded_hh) if uploaded_hh else AudioSegment.from_file(default_hh_path)
 
-        label, wav_buffer, midi_buffer = generate(
-            model_choice, bpm, threshold, noise_level, temperature,
-            kick_sound, snare_sound, hh_sound, output_format
-        )
-        st.success(label)
-        if wav_buffer:
-            st.audio(wav_buffer, format="audio/wav")
-            st.download_button("Download WAV", data=wav_buffer, file_name="generated_sample.wav", mime="audio/wav")
-        if midi_buffer:
-            st.download_button("Download MIDI", data=midi_buffer, file_name="generated_sample.mid", mime="audio/midi")
+        model, X = load_model_and_data(model_choice)
+        gen_combined, gen_kick, gen_hh = generate_pattern(model, X, bpm, threshold, noise_level, temperature)
+
+        if output_format == "MIDI":
+            kick_midi, snare_midi, hh_midi = generate_individual_midi_tracks(gen_kick, gen_combined, gen_hh, bpm)
+            st.success("MIDI tracks generated successfully!")
+
+            # Download buttons for each MIDI file
+            st.download_button("Download Kick MIDI", data=kick_midi, file_name="kick_track.mid", mime="audio/midi")
+            st.download_button("Download Snare MIDI", data=snare_midi, file_name="snare_track.mid", mime="audio/midi")
+            st.download_button("Download Hi-Hat MIDI", data=hh_midi, file_name="hh_track.mid", mime="audio/midi")
+
+        else:
+            audio_buffer = pattern_to_audio_full(gen_kick, gen_combined, gen_hh, bpm, kick_sound, snare_sound, hh_sound)
+            st.success("WAV file generated successfully!")
+            st.audio(audio_buffer, format="audio/wav")
+            st.download_button("Download WAV", data=audio_buffer, file_name="generated_sample.wav", mime="audio/wav")
+
     except Exception as e:
         st.error(f"An error occurred: {e}")
