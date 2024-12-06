@@ -131,7 +131,7 @@ def generate(model_choice, bpm, threshold, noise_level, temperature,
 # Streamlit UI
 # -------------------------------------------
 
-st.title("Drum Pattern Generator")
+st.title("Gen AI Drum Pattern Generator")
 
 model_choices = ["lstm", "transformer"]
 output_choices = ["WAV", "MIDI"]
@@ -144,6 +144,10 @@ threshold = st.slider("Threshold", min_value=0.0, max_value=1.0, value=0.5, step
 noise_level = st.slider("Noise Level", min_value=0.0, max_value=0.5, value=0.1, step=0.01)
 temperature = st.slider("Temperature", min_value=0.1, max_value=2.0, value=1.0, step=0.1)
 
+DEFAULT_KICK_PATH = "defaults/kick.wav"
+DEFAULT_SNARE_PATH = "defaults/snare.wav"
+DEFAULT_HH_PATH = "defaults/hh.wav"
+
 st.markdown("### Upload Your Drum Samples")
 uploaded_kick = st.file_uploader("Upload Kick Sample (WAV)", type="wav")
 uploaded_snare = st.file_uploader("Upload Snare Sample (WAV)", type="wav")
@@ -151,22 +155,25 @@ uploaded_hh = st.file_uploader("Upload Hi-Hat Sample (WAV)", type="wav")
 
 if st.button("Generate"):
     try:
-        if not uploaded_kick or not uploaded_snare or not uploaded_hh:
-            st.error("Please upload all three drum samples to proceed.")
-        else:
-            kick_sound = AudioSegment.from_file(uploaded_kick)
-            snare_sound = AudioSegment.from_file(uploaded_snare)
-            hh_sound = AudioSegment.from_file(uploaded_hh)
+        # Use uploaded files or default files
+        kick_sound = AudioSegment.from_file(uploaded_kick) if uploaded_kick else AudioSegment.from_file(
+            DEFAULT_KICK_PATH)
+        snare_sound = AudioSegment.from_file(uploaded_snare) if uploaded_snare else AudioSegment.from_file(
+            DEFAULT_SNARE_PATH)
+        hh_sound = AudioSegment.from_file(uploaded_hh) if uploaded_hh else AudioSegment.from_file(DEFAULT_HH_PATH)
 
-            label, wav_buffer, midi_buffer = generate(
-                model_choice, bpm, threshold, noise_level, temperature,
-                kick_sound, snare_sound, hh_sound, output_format
-            )
-            st.success(label)
-            if wav_buffer:
-                st.audio(wav_buffer, format="audio/wav")
-                st.download_button("Download WAV", data=wav_buffer, file_name="generated_sample.wav", mime="audio/wav")
-            if midi_buffer:
-                st.download_button("Download MIDI", data=midi_buffer, file_name="generated_sample.mid", mime="audio/midi")
+        # Call your generate function (adjust as per your code)
+        label, wav_buffer, midi_buffer = generate(
+            model_choice, bpm, threshold, noise_level, temperature,
+            kick_sound, snare_sound, hh_sound, output_format
+        )
+
+        # Display results
+        st.success(label)
+        if wav_buffer:
+            st.audio(wav_buffer, format="audio/wav")
+            st.download_button("Download WAV", data=wav_buffer, file_name="generated_sample.wav", mime="audio/wav")
+        if midi_buffer:
+            st.download_button("Download MIDI", data=midi_buffer, file_name="generated_sample.mid", mime="audio/midi")
     except Exception as e:
         st.error(f"An error occurred: {e}")
