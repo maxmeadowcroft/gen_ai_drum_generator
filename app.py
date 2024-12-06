@@ -108,10 +108,12 @@ def pattern_to_midi(gen_combined, gen_kick, gen_hh, bpm):
             hh_track.append(mido.Message('note_on', note=HH_NOTE, velocity=64, time=0))
             hh_track.append(mido.Message('note_off', note=HH_NOTE, velocity=64, time=step_ticks))
 
+    # Save MIDI to a BytesIO object
     buffer = BytesIO()
-    mid.save(buffer)
-    buffer.seek(0)
+    mid.save(file=buffer)
+    buffer.seek(0)  # Reset the buffer position for reading
     return buffer
+
 
 
 def generate(model_choice, bpm, threshold, noise_level, temperature,
