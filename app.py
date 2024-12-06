@@ -51,17 +51,36 @@ def generate_pattern(model, X, bpm, threshold, noise_level, temperature):
     return gen_combined, gen_kick, gen_hh
 
 
+def pattern_to_audio_full(gen_kick, gen_combined, gen_hh, bpm, kick_sound, snare_sound, hh_sound):
+    ms_per_beat = 60000.0 / bpm
+    total_duration_ms = TOTAL_BEATS * ms_per_beat
+    step_duration_ms = total_duration_ms / STEPS
+
+    output = AudioSegment.silent(duration=int(total_duration_ms))
+
+    for i in range(STEPS):
+        start_time_ms = int(i * step_duration_ms)
+        if gen_kick[i] == 1:
+            output = output.overlay(kick_sound, position=start_time_ms)
+        if gen_combined[i] == 1:
+            output = output.overlay(snare_sound, position=start_time_ms)
+        if gen_hh[i] == 1:
+            output = output.overlay(hh_sound, position=start_time_ms)
+
+    buffer = BytesIO()
+    output.export(buffer, format="wav")
+    buffer.seek(0)
+    return buffer
+
+
 def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm):
-    # Define MIDI note constants
     KICK_NOTE = 36
     SNARE_NOTE = 38
     HH_NOTE = 42
 
-    # MIDI settings
     microseconds_per_beat = int(60_000_000 / bpm)
     step_ticks = 120
 
-    # Function to create a single MIDI track
     def create_midi_track(pattern, note):
         mid = mido.MidiFile()
         track = mido.MidiTrack()
@@ -77,12 +96,10 @@ def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm
                 abs_time += step_ticks
         return mid
 
-    # Generate individual MIDI files
     kick_midi = create_midi_track(kick_pattern, KICK_NOTE)
     snare_midi = create_midi_track(snare_pattern, SNARE_NOTE)
     hh_midi = create_midi_track(hh_pattern, HH_NOTE)
 
-    # Save to buffers
     kick_buffer = BytesIO()
     snare_buffer = BytesIO()
     hh_buffer = BytesIO()
@@ -91,7 +108,6 @@ def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm
     snare_midi.save(snare_buffer)
     hh_midi.save(hh_buffer)
 
-    # Reset buffer positions
     kick_buffer.seek(0)
     snare_buffer.seek(0)
     hh_buffer.seek(0)
@@ -105,7 +121,6 @@ def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm
 
 st.title("Gen AI Drum Pattern Generator")
 
-# Default sound paths
 default_kick_path = Path("./kick.wav")
 default_snare_path = Path("./snare.wav")
 default_hh_path = Path("./hh.wav")
@@ -140,7 +155,6 @@ if st.button("Generate"):
             kick_midi, snare_midi, hh_midi = generate_individual_midi_tracks(gen_kick, gen_combined, gen_hh, bpm)
             st.success("MIDI tracks generated successfully!")
 
-            # Download buttons for each MIDI file
             st.download_button("Download Kick MIDI", data=kick_midi, file_name="kick_track.mid", mime="audio/midi")
             st.download_button("Download Snare MIDI", data=snare_midi, file_name="snare_track.mid", mime="audio/midi")
             st.download_button("Download Hi-Hat MIDI", data=hh_midi, file_name="hh_track.mid", mime="audio/midi")
