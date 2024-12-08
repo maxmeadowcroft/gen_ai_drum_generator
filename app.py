@@ -118,18 +118,35 @@ def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm
     return kick_buffer, snare_buffer, hh_buffer
 
 
-# -------------------------------------------
-# Streamlit UI
-# -------------------------------------------
-
-st.title("Gen AI Drum Pattern Generator")
-
 default_kick_path = Path("./kick.wav")
 default_snare_path = Path("./snare.wav")
 default_hh_path = Path("./hh.wav")
 
-model_choices = ["lstm", "transformer"]
+# -------------------------------------------
+# Streamlit UI
+# -------------------------------------------
 
+# App Description
+st.title("Gen AI Drum Pattern Generator")
+st.markdown("""
+Welcome to the Gen AI Drum Pattern Generator! This app uses cutting-edge generative AI models to create custom drum patterns with options for dynamic control and sound customization.
+
+### Features:
+- **Default Drums**: If you don't upload custom samples, we use our high-quality default drum sounds.
+- **Customizable Controls**: Adjust parameters like BPM, noise, and temperature for unique variations in drum patterns.
+- **Volume Control**: Fine-tune the volume of each track (kick, snare, hi-hat) to create your desired mix.
+
+### How Each Slider Works:
+- **BPM**: Controls the speed of the drum pattern.
+- **Threshold**: Sets the intensity of generated beats (lower values = more beats).
+- **Noise Level**: Adds randomness to the pattern for more organic results.
+- **Temperature**: Affects creativity in AI generation (higher = more varied patterns).
+- **Volume Sliders**: Adjust the loudness of each track (kick, snare, hi-hat).
+""")
+
+# Section: Model Selection
+st.header("1. Select Model and Settings")
+model_choices = ["lstm", "transformer"]
 model_choice = st.selectbox("Model Choice", model_choices, index=0)
 
 bpm = st.slider("BPM", min_value=120, max_value=240, value=170)
@@ -137,24 +154,36 @@ threshold = st.slider("Threshold", min_value=0.0, max_value=1.0, value=0.5, step
 noise_level = st.slider("Noise Level", min_value=0.0, max_value=0.5, value=0.1, step=0.01)
 temperature = st.slider("Temperature", min_value=0.1, max_value=2.0, value=1.0, step=0.1)
 
-st.markdown("### Upload Your Drum Samples")
+# Section: Upload Drum Samples
+st.header("2. Upload Drum Samples")
 uploaded_kick = st.file_uploader("Upload Kick Sample (WAV)", type="wav")
 uploaded_snare = st.file_uploader("Upload Snare Sample (WAV)", type="wav")
 uploaded_hh = st.file_uploader("Upload Hi-Hat Sample (WAV)", type="wav")
 
-if 'generated_data' not in st.session_state:
-    st.session_state.generated_data = None
+# Section: Volume Controls
+st.header("3. Adjust Track Volumes")
+kick_volume = st.slider("Kick Volume", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+snare_volume = st.slider("Snare Volume", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
+hh_volume = st.slider("Hi-Hat Volume", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
 
+# Generate Button
 if st.button("Generate"):
     try:
-        # Use uploaded files or defaults
+        # Load drum sounds
         kick_sound = AudioSegment.from_file(uploaded_kick) if uploaded_kick else AudioSegment.from_file(default_kick_path)
         snare_sound = AudioSegment.from_file(uploaded_snare) if uploaded_snare else AudioSegment.from_file(default_snare_path)
         hh_sound = AudioSegment.from_file(uploaded_hh) if uploaded_hh else AudioSegment.from_file(default_hh_path)
 
+        # Adjust volumes
+        kick_sound = kick_sound + (20 * np.log10(kick_volume)) if kick_volume > 0 else AudioSegment.silent()
+        snare_sound = snare_sound + (20 * np.log10(snare_volume)) if snare_volume > 0 else AudioSegment.silent()
+        hh_sound = hh_sound + (20 * np.log10(hh_volume)) if hh_volume > 0 else AudioSegment.silent()
+
+        # Load model and generate patterns
         model, X = load_model_and_data(model_choice)
         gen_combined, gen_kick, gen_hh = generate_pattern(model, X, bpm, threshold, noise_level, temperature)
 
+        # Generate audio and MIDI files
         audio_buffer = pattern_to_audio_full(gen_kick, gen_combined, gen_hh, bpm, kick_sound, snare_sound, hh_sound)
         kick_midi, snare_midi, hh_midi = generate_individual_midi_tracks(gen_kick, gen_combined, gen_hh, bpm)
 
@@ -169,10 +198,10 @@ if st.button("Generate"):
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
-# Provide download buttons for both WAV and MIDI
-if st.session_state.generated_data:
-    st.audio(st.session_state.generated_data['audio_buffer'], format="audio/wav")
-    st.download_button("Download WAV", data=st.session_state.generated_data['audio_buffer'], file_name="generated_sample.wav", mime="audio/wav")
-    st.download_button("Download Kick MIDI", data=st.session_state.generated_data['kick_midi'], file_name="kick_track.mid", mime="audio/midi")
-    st.download_button("Download Snare MIDI", data=st.session_state.generated_data['snare_midi'], file_name="snare_track.mid", mime="audio/midi")
-    st.download_button("Download Hi-Hat MIDI", data=st.session_state.generated_data['hh_midi'], file_name="hh_track.mid", mime="audio/midi")
+# Provide download buttons for generated files
+if st.session_state.get("generated_data"):
+    st.audio(st.session_state['generated_data']['audio_buffer'], format="audio/wav")
+    st.download_button("Download WAV", data=st.session_state['generated_data']['audio_buffer'], file_name="generated_sample.wav", mime="audio/wav")
+    st.download_button("Download Kick MIDI", data=st.session_state['generated_data']['kick_midi'], file_name="kick_track.mid", mime="audio/midi")
+    st.download_button("Download Snare MIDI", data=st.session_state['generated_data']['snare_midi'], file_name="snare_track.mid", mime="audio/midi")
+    st.download_button("Download Hi-Hat MIDI", data=st.session_state['generated_data']['hh_midi'], file_name="hh_track.mid", mime="audio/midi")
