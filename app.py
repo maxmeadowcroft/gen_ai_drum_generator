@@ -118,6 +118,19 @@ def generate_individual_midi_tracks(kick_pattern, snare_pattern, hh_pattern, bpm
     return kick_buffer, snare_buffer, hh_buffer
 
 
+def apply_lofi_effects(audio):
+    """Applies lo-fi effects to the audio."""
+    # Reduce bitrate (downsample and upsample)
+    audio = audio.set_frame_rate(8000).set_frame_rate(44100)
+    # Add noise
+    noise = AudioSegment.silent(duration=len(audio)).overlay(
+        AudioSegment.from_file("vinyl_crackle.wav").set_frame_rate(44100), loop=True
+    )
+    audio = audio.overlay(noise - 25)  # Blend noise at lower volume
+    # Apply low-pass filter (simulate muffling)
+    return audio.low_pass_filter(3000)
+
+
 default_kick_path = Path("./kick.wav")
 default_snare_path = Path("./snare.wav")
 default_hh_path = Path("./hh.wav")
@@ -135,6 +148,7 @@ Welcome to the Gen AI Drum Pattern Generator! This app uses cutting-edge generat
 - **Default Drums**: If you don't upload custom samples, we use our high-quality default drum sounds.
 - **Customizable Controls**: Adjust parameters like BPM, noise, and temperature for unique variations in drum patterns.
 - **Volume Control**: Fine-tune the volume of each track (kick, snare, hi-hat) to create your desired mix.
+- **Lo-fi Mode**: Instantly give your drums a lo-fi vibe with reduced quality, subtle noise, and low-pass filtering.
 
 ### How Each Slider Works:
 - **BPM**: Controls the speed of the drum pattern.
@@ -166,6 +180,10 @@ kick_volume = st.slider("Kick Volume", min_value=0.0, max_value=2.0, value=1.0, 
 snare_volume = st.slider("Snare Volume", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
 hh_volume = st.slider("Hi-Hat Volume", min_value=0.0, max_value=2.0, value=1.0, step=0.1)
 
+# Lo-fi Toggle
+st.header("4. Additional Features")
+lofi_mode = st.checkbox("Enable Lo-fi Mode")
+
 # Generate Button
 if st.button("Generate"):
     try:
@@ -178,6 +196,12 @@ if st.button("Generate"):
         kick_sound = kick_sound + (20 * np.log10(kick_volume)) if kick_volume > 0 else AudioSegment.silent()
         snare_sound = snare_sound + (20 * np.log10(snare_volume)) if snare_volume > 0 else AudioSegment.silent()
         hh_sound = hh_sound + (20 * np.log10(hh_volume)) if hh_volume > 0 else AudioSegment.silent()
+
+        # Apply Lo-fi effects if enabled
+        if lofi_mode:
+            kick_sound = apply_lofi_effects(kick_sound)
+            snare_sound = apply_lofi_effects(snare_sound)
+            hh_sound = apply_lofi_effects(hh_sound)
 
         # Load model and generate patterns
         model, X = load_model_and_data(model_choice)
