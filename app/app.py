@@ -124,16 +124,16 @@ def apply_lofi_effects(audio):
     audio = audio.set_frame_rate(8000).set_frame_rate(44100)
     # Add noise
     noise = AudioSegment.silent(duration=len(audio)).overlay(
-        AudioSegment.from_file("static/vinyl_crackle.wav").set_frame_rate(44100), loop=True
+        AudioSegment.from_file("app/static/vinyl_crackle.wav").set_frame_rate(44100), loop=True
     )
     audio = audio.overlay(noise - 25)  # Blend noise at lower volume
     # Apply low-pass filter (simulate muffling)
     return audio.low_pass_filter(3000)
 
 
-default_kick_path = Path("static/kick.wav")
-default_snare_path = Path("static/snare.wav")
-default_hh_path = Path("static/hh.wav")
+default_kick_path = Path("app/static/kick.wav")
+default_snare_path = Path("app/static/snare.wav")
+default_hh_path = Path("app/static/hh.wav")
 
 # -------------------------------------------
 # Streamlit UI
