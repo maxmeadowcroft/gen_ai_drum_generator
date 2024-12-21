@@ -14,9 +14,9 @@ from tempfile import NamedTemporaryFile
 # -------------------------------------------
 
 def load_model_and_data(model_choice):
-    model_path = f"../models/{model_choice}_model.keras"
+    model_path = f"/models/{model_choice}_model.keras"
     model = keras.models.load_model(model_path, compile=False)
-    X = np.load('../data/X_data.npy')
+    X = np.load('/data/X_data.npy')
     if model_choice in ['lstm', 'transformer']:
         X = X.reshape(X.shape[0], 128, 3)
     return model, X
